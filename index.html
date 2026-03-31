@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>혈당 기록</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #f4f1ec;
+    --surface: #fdfcfa;
+    --border: #e2ddd6;
+    --text: #1e1c19;
+    --muted: #8a8480;
+    --accent: #c0392b;
+    --safe: #27ae60;
+    --warn: #e67e22;
+    --danger: #c0392b;
+    --blue: #2980b9;
+    --period: #e91e8c;
+    --purple: #8e44ad;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 24px 16px 100px; }
+
+  header { text-align: center; margin-bottom: 20px; }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  header p { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  /* 네비 */
+  .nav-tabs { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 4px; margin-bottom: 20px; gap: 3px; }
+  .nav-tab { flex: 1; padding: 9px 4px; border: none; background: transparent; border-radius: 10px; font-size: 11px; font-weight: 500; font-family: 'Noto Sans KR', sans-serif; color: var(--muted); cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .nav-tab.active { background: var(--accent); color: #fff; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* 카드 */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin-bottom: 16px; }
+  .card-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; border-left: 3px solid var(--accent); padding-left: 9px; }
+
+  /* 입력 */
+  .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .input-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .input-group { display: flex; flex-direction: column; gap: 4px; }
+  .input-group label { font-size: 11px; color: var(--muted); font-weight: 500; }
+  .inp {
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px 11px; font-size: 14px;
+    font-family: 'DM Mono', monospace; background: var(--bg); color: var(--text); outline: none;
+    transition: border-color 0.2s; width: 100%;
+  }
+  .inp:focus { border-color: var(--accent); }
+  .inp-text { font-family: 'Noto Sans KR', sans-serif; }
+  select.inp { font-family: 'Noto Sans KR', sans-serif; }
+
+  /* 버튼 */
+  .btn { width: 100%; padding: 12px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; font-family: 'Noto Sans KR', sans-serif; cursor: pointer; transition: opacity 0.2s; }
+  .btn + .btn { margin-top: 7px; }
+  .btn:hover { opacity: 0.85; }
+  .btn-red { background: var(--accent); color: #fff; }
+  .btn-green { background: var(--safe); color: #fff; }
+  .btn-blue { background: var(--blue); color: #fff; }
+  .btn-pink { background: var(--period); color: #fff; }
+  .btn-ghost { background: var(--bg); color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+
+  /* 혈당 상태 뱃지 */
+  .sugar-badge { display: none; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; color: #fff; align-self: flex-end; white-space: nowrap; }
+
+  /* 생리 체크 */
+  .period-check-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: 10px; margin-bottom: 10px; }
+  .period-check-row span { font-size: 13px; color: var(--period); font-weight: 700; flex: 1; }
+  .period-check-row input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--period); cursor: pointer; }
+
+  /* 차트 서브탭 */
+  .sub-tabs { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 4px; margin-bottom: 14px; gap: 4px; }
+  .sub-tab { flex: 1; padding: 8px 4px; border: none; background: transparent; border-radius: 9px; font-size: 13px; font-weight: 500; font-family: 'Noto Sans KR', sans-serif; color: var(--muted); cursor: pointer; transition: all 0.2s; }
+  .sub-tab.active { background: var(--accent); color: #fff; }
+
+  /* 차트 */
+  .chart-wrap { position: relative; height: 230px; }
+  .chart-wrap.tall { height: 270px; }
+  .chart-hint { text-align: center; font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+  /* 통계 */
+  .stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 8px; text-align: center; }
+  .stat-box .sv { font-size: 19px; font-weight: 700; font-family: 'DM Mono', monospace; }
+  .stat-box .sl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* 범위 안내 */
+  .range-guide { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 18px; }
+  .rg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .rg-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* 목록 */
+  .list-item { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border-radius: 10px; padding: 10px 13px; cursor: pointer; transition: background 0.15s; margin-bottom: 7px; }
+  .list-item:hover { background: #ede9e3; }
+  .list-label { font-size: 12px; color: var(--muted); }
+  .list-val { font-size: 17px; font-weight: 700; font-family: 'DM Mono', monospace; }
+  .list-val.safe { color: var(--safe); }
+  .list-val.warn { color: var(--warn); }
+  .list-val.danger { color: var(--danger); }
+  .list-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 2px 6px; border-radius: 6px; }
+  .list-del:hover { background: #f0ece8; }
+  .tag { padding: 2px 7px; border-radius: 5px; color: #fff; font-size: 10px; font-weight: 700; margin-left: 5px; }
+  .empty { text-align: center; color: var(--muted); font-size: 13px; padding: 18px 0; }
+  .date-header { font-size: 11px; font-weight: 800; color: var(--muted); padding: 8px 4px 3px; border-top: 1px solid var(--border); margin-top: 3px; }
+  .date-header.today { color: var(--accent); }
+
+  /* 생리 기록 */
+  .period-btn-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .period-status { font-size: 13px; color: var(--muted); }
+  .period-status.active { color: var(--period); font-weight: 700; }
+  .period-hist-item { display: flex; justify-content: space-between; align-items: center; padding: 7px 11px; background: var(--bg); border-radius: 8px; margin-bottom: 5px; font-size: 13px; }
+  .period-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; }
+
+  /* 타이머 */
+  .timer-display { font-size: 50px; font-weight: 700; font-family: 'DM Mono', monospace; text-align: center; margin: 12px 0; letter-spacing: 2px; }
+  .timer-display.running { color: var(--accent); }
+  .timer-display.done { color: var(--safe); }
+  .timer-30-display { font-size: 22px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--purple); }
+  .timer-bar-bg { width: 100%; height: 7px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 6px 0 12px; }
+  .timer-bar-fill { height: 100%; background: var(--accent); width: 100%; transition: width 1s linear; border-radius: 4px; }
+  .timer-bar-fill.purple { background: var(--purple); }
+  .sound-toggle { display: flex; align-items: center; justify-content: flex-end; gap: 7px; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .sound-toggle input { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+  .photo-label { cursor: pointer; display: block; background: var(--bg); border: 2px dashed var(--border); padding: 16px; border-radius: 12px; margin-bottom: 10px; text-align: center; font-size: 13px; color: var(--muted); transition: border-color 0.2s; }
+  .photo-label:hover { border-color: var(--accent); }
+  #photo-preview { width: 100%; border-radius: 12px; display: none; margin-bottom: 10px; max-height: 200px; object-fit: cover; }
+
+  /* 알람 */
+  .alarm-item { background: var(--bg); border-radius: 12px; padding: 13px; margin-bottom: 9px; display: flex; align-items: center; gap: 9px; }
+  .alarm-info { flex: 1; }
+  .alarm-time-lbl { font-size: 21px; font-weight: 700; font-family: 'DM Mono', monospace; }
+  .alarm-note { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .alarm-toggle { position: relative; width: 42px; height: 23px; background: var(--border); border-radius: 12px; cursor: pointer; border: none; transition: background 0.2s; flex-shrink: 0; }
+  .alarm-toggle.on { background: var(--safe); }
+  .alarm-toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 17px; height: 17px; background: #fff; border-radius: 50%; transition: left 0.2s; }
+  .alarm-toggle.on::after { left: 22px; }
+  .alarm-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 17px; padding: 3px 7px; }
+
+  /* 모달 공통 */
+  .modal-overlay, .alarm-modal, .quick-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.42); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open, .alarm-modal.open, .quick-modal.open { display: flex; }
+  .modal-box { background: var(--surface); border-radius: 20px; padding: 22px; width: 100%; max-width: 360px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+  .modal-box h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+  .modal-btns { display: flex; gap: 8px; margin-top: 14px; }
+  .btn-save { flex: 1; padding: 11px; background: var(--accent); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; font-family: 'Noto Sans KR', sans-serif; cursor: pointer; }
+  .btn-cancel { flex: 1; padding: 11px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 10px; font-size: 14px; font-weight: 500; font-family: 'Noto Sans KR', sans-serif; cursor: pointer; }
+
+  /* 알람 울림 */
+  .alarm-fire-box { background: var(--surface); border-radius: 24px; padding: 30px 22px; width: 100%; max-width: 340px; text-align: center; box-shadow: 0 12px 48px rgba(0,0,0,0.25); animation: popIn 0.3s ease; }
+  @keyframes popIn { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .alarm-icon { font-size: 50px; margin-bottom: 10px; display: inline-block; animation: ring 0.5s ease infinite alternate; }
+  @keyframes ring { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }
+  .alarm-msg { font-size: 17px; font-weight: 700; margin-bottom: 7px; line-height: 1.5; }
+  .alarm-sub { font-size: 13px; color: var(--muted); margin-bottom: 22px; }
+  .btn-dismiss { width: 100%; padding: 13px; background: var(--accent); color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; font-family: 'Noto Sans KR', sans-serif; cursor: pointer; margin-bottom: 8px; }
+  .btn-snooze { width: 100%; padding: 11px; background: var(--bg); color: var(--muted); border: 1px solid var(--border); border-radius: 12px; font-size: 13px; font-family: 'Noto Sans KR', sans-serif; cursor: pointer; }
+
+  /* 빠른 기록 */
+  .qr-time { text-align: center; font-size: 28px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--accent); margin-bottom: 14px; }
+
+  /* 주간 범례 */
+  .week-legend { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .wl-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+  .wl-line { width: 20px; height: 3px; border-radius: 2px; }
+
+  /* 분석 기간 네비게이터 */
+  .period-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .period-nav-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; width: 38px; height: 38px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text); transition: background 0.15s; flex-shrink: 0; }
+  .period-nav-btn:hover { background: var(--border); }
+  .period-nav-btn:disabled { opacity: 0.25; cursor: default; }
+  .period-nav-label { font-size: 13px; font-weight: 700; color: var(--text); text-align: center; flex: 1; padding: 0 8px; line-height: 1.3; }
+  .swipe-area { touch-action: pan-y; user-select: none; }
+
+  /* 사용자 이름 */
+  .user-name-wrap { text-align: center; margin-bottom: 18px; }
+  .user-name-row { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); border-bottom: 1.5px solid var(--border); padding-bottom: 3px; }
+  .user-name-input { border: none; background: transparent; font-size: 15px; font-weight: 700; color: var(--text); font-family: 'Noto Sans KR', sans-serif; outline: none; min-width: 80px; max-width: 160px; text-align: center; }
+  .user-name-input::placeholder { color: var(--border); font-weight: 400; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🩸 혈당 기록</h1>
+  <p>Blood Sugar Management for Women</p>
+</header>
+<div class="user-name-wrap">
+  <div class="user-name-row">
+    <span>나는</span>
+    <input type="text" class="user-name-input" id="user-name-input" placeholder="이름을 입력해요" maxlength="20" oninput="saveUserName(this.value)">
+    <span>입니다</span>
+  </div>
+</div>
+
+<div class="nav-tabs">
+  <button class="nav-tab active" onclick="switchPage('record',this)">📝 기록</button>
+  <button class="nav-tab" onclick="switchPage('timer',this)">⏱ 타이머</button>
+  <button class="nav-tab" onclick="switchPage('analysis',this)">📊 분석</button>
+  <button class="nav-tab" onclick="switchPage('alarm',this)">⏰ 알람</button>
+</div>
+
+<!-- ===== 기록 페이지 ===== -->
+<div id="page-record" class="page active">
+
+  <!-- 체중 기록 (체중+지방+근육) -->
+  <div class="card">
+    <div class="card-title">⚖️ 체중 기록</div>
+    <input type="hidden" id="edit-w-id">
+    <div class="input-grid" style="margin-bottom:8px;">
+      <div class="input-group"><label>날짜</label><input type="date" id="w-date" class="inp"></div>
+      <div class="input-group"><label>체중 (kg)</label><input type="number" id="w-weight" placeholder="예: 58.5" step="0.1" class="inp"></div>
+    </div>
+    <div class="input-grid-3">
+      <div class="input-group"><label>지방 (kg)</label><input type="number" id="w-fat" placeholder="예: 18.2" step="0.1" class="inp"></div>
+      <div class="input-group"><label>근육 (kg)</label><input type="number" id="w-muscle" placeholder="예: 36.0" step="0.1" class="inp"></div>
+      <div class="input-group"><label>체지방률 (%)</label><input type="number" id="w-fat-pct" placeholder="자동" step="0.1" class="inp" readonly style="background:#f0ede8;color:var(--muted);"></div>
+    </div>
+    <button class="btn btn-blue" onclick="saveWeight()">+ 체중 저장/수정</button>
+  </div>
+
+  <!-- 혈당 기록 -->
+  <div class="card">
+    <div class="card-title">🩸 혈당 기록</div>
+    <input type="hidden" id="edit-g-id">
+    <div class="input-grid" style="margin-bottom:8px;">
+      <div class="input-group"><label>날짜</label><input type="date" id="g-date" class="inp"></div>
+      <div class="input-group"><label>시간</label><input type="time" id="g-time" class="inp"></div>
+    </div>
+    <div class="input-grid" style="margin-bottom:8px;">
+      <div class="input-group">
+        <label>측정 시점</label>
+        <select id="g-status" class="inp" onchange="checkSugarStatus()">
+          <option value="공복">아침 기상공복</option>
+          <option value="식전">식전</option>
+          <option value="식후2">식후 2시간</option>
+          <option value="취침전">취침전</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>혈당 (mg/dL)</label>
+        <div style="display:flex;gap:7px;align-items:flex-start;">
+          <input type="number" id="g-val" placeholder="예: 95" oninput="checkSugarStatus()" class="inp" style="flex:1;">
+          <div class="sugar-badge" id="sugar-badge"></div>
+        </div>
+      </div>
+    </div>
+    <!-- 생리 중 체크 -->
+    <div class="period-check-row">
+      <span>🌸 생리 중</span>
+      <input type="checkbox" id="g-period">
+    </div>
+    <button class="btn btn-red" onclick="saveSugar()">🩸 혈당 기록 저장</button>
+  </div>
+
+  <!-- 생리기간 독립 기록 -->
+  <div class="card">
+    <div class="card-title">🌸 생리기간 기록</div>
+    <div id="period-today-display" style="font-size:13px;color:var(--muted);margin-bottom:12px;"></div>
+    <div class="period-btn-row">
+      <button class="btn btn-pink" style="flex:1" onclick="startPeriod()">🩸 하는 중</button>
+      <button class="btn btn-ghost" style="flex:1" onclick="endPeriod()">✓ 끝남</button>
+    </div>
+    <div class="period-status" id="period-status">현재 생리 기간이 아니에요</div>
+    <div id="period-history" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- 통계 -->
+  <div class="stats-row">
+    <div class="stat-box"><div class="sv" id="s-avg">—</div><div class="sl">오늘 평균</div></div>
+    <div class="stat-box"><div class="sv" id="s-min">—</div><div class="sl">최저</div></div>
+    <div class="stat-box"><div class="sv" id="s-max">—</div><div class="sl">최고</div></div>
+  </div>
+
+  <!-- 기록 목록 -->
+  <div class="card">
+    <div class="card-title">전체 기록 <span style="font-size:11px;font-weight:400;color:var(--muted)">· 탭하면 수정</span></div>
+    <div id="history-list" style="max-height:400px;overflow-y:auto;">
+      <div class="empty">아직 기록이 없습니다.</div>
+    </div>
+  </div>
+
+</div><!-- /record -->
+
+<!-- ===== 타이머 페이지 ===== -->
+<div id="page-timer" class="page">
+  <div class="card" style="text-align:center;">
+    <div class="card-title" style="text-align:left;">🍽 식사 타이머</div>
+    <div class="sound-toggle">
+      <span>🔊 알림음 사용</span>
+      <input type="checkbox" id="alarm-sound-on" checked>
+    </div>
+
+    <!-- 식사 사진 업로드 -->
+    <input type="file" id="meal-photo" accept="image/*" style="display:none;" onchange="previewImage(this)">
+    <label for="meal-photo" class="photo-label">🖼️ 식사 사진 선택 (선택)</label>
+    <img id="photo-preview" alt="식사 사진">
+
+    <div style="margin-bottom:12px;text-align:left;">
+      <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">식사 메모 (선택)</label>
+      <input type="text" class="inp inp-text" id="meal-memo" placeholder="예: 점심 — 비빔밥">
+    </div>
+
+    <button class="btn btn-blue" id="btn-timer-start" onclick="startMealTimer()">🍚 식사 시작</button>
+
+    <!-- 타이머 UI (식사 시작 후 표시) -->
+    <div id="timer-ui" style="display:none; margin-top:18px;">
+      <!-- 30분 타이머 -->
+      <div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <span style="font-size:13px;font-weight:700;color:var(--purple);">🍱 식사 30분 타이머</span>
+          <div class="timer-30-display" id="timer-30-display">30:00</div>
+        </div>
+        <div class="timer-bar-bg"><div class="timer-bar-fill purple" id="bar-30"></div></div>
+      </div>
+      <!-- 2시간 타이머 -->
+      <div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <span style="font-size:13px;font-weight:700;color:var(--accent);">🩸 식후 2시간 타이머</span>
+          <div class="timer-display" id="timer-120-display" style="font-size:28px;margin:0;letter-spacing:1px;">02:00:00</div>
+        </div>
+        <div class="timer-bar-bg"><div class="timer-bar-fill" id="bar-120"></div></div>
+      </div>
+      <button class="btn btn-ghost" id="btn-timer-cancel" onclick="cancelTimer()">타이머 취소</button>
+    </div>
+  </div>
+
+  <div class="card" id="timer-recent" style="display:none;">
+    <div class="card-title">최근 타이머 기록 <span style="font-size:11px;font-weight:400;color:var(--muted)">· 탭하면 수정/삭제</span></div>
+    <div id="timer-history-list"></div>
+  </div>
+
+<!-- ── 타이머 기록 수정 모달 ── -->
+<div class="modal-overlay" id="edit-timer-modal" onclick="closeEditTimerModal(event)">
+  <div class="modal-box">
+    <h3>✏️ 타이머 기록 수정</h3>
+    <input type="hidden" id="modal-timer-idx">
+    <div class="input-grid" style="margin-bottom:8px;">
+      <div class="input-group"><label>날짜</label><input type="date" id="modal-timer-date" class="inp"></div>
+      <div class="input-group"><label>시작 시간</label><input type="time" id="modal-timer-start" class="inp"></div>
+    </div>
+    <div class="input-group" style="margin-bottom:14px;">
+      <label>식사 메모</label>
+      <input type="text" id="modal-timer-memo" class="inp inp-text" placeholder="예: 점심 — 비빔밥">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeEditTimerModal()">취소</button>
+      <button class="btn-save" onclick="saveEditTimer()">저장</button>
+    </div>
+  </div>
+</div>
+</div><!-- /timer -->
+
+<!-- ===== 분석 페이지 ===== -->
+<div id="page-analysis" class="page">
+
+  <div class="sub-tabs">
+    <button class="sub-tab" id="tab-day" onclick="renderAnalysis('day')">일간</button>
+    <button class="sub-tab active" id="tab-week" onclick="renderAnalysis('week')">주간</button>
+    <button class="sub-tab" id="tab-month" onclick="renderAnalysis('month')">월간</button>
+  </div>
+
+  <div class="card swipe-area" id="analysis-card">
+    <div class="period-nav">
+      <button class="period-nav-btn" onclick="shiftPeriod(-1)" title="이전">‹</button>
+      <div class="period-nav-label" id="analysis-title">주간 분석</div>
+      <button class="period-nav-btn" id="btn-period-next" onclick="shiftPeriod(1)" title="다음">›</button>
+    </div>
+    <div class="week-legend" id="analysis-legend" style="display:none;"></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap;" id="analysis-axis-legend">
+      <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);">
+        <div style="width:18px;height:2px;background:var(--accent);border-radius:2px;"></div>혈당 (좌)
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);">
+        <div style="width:18px;height:2px;background:var(--blue);border-top:2px dashed var(--blue);"></div>체중 (우)
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);">
+        <div style="width:18px;height:2px;background:var(--warn);border-top:2px dashed var(--warn);"></div>지방 (우)
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);">
+        <div style="width:18px;height:2px;background:var(--safe);border-top:2px dashed var(--safe);"></div>근육 (우)
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);">
+        <div style="width:18px;height:5px;background:rgba(233,30,140,0.4);border-radius:2px;"></div>생리기간
+      </div>
+    </div>
+    <div class="chart-wrap tall" id="analysis-chart-wrap"><canvas id="main-chart"></canvas></div>
+    <div class="chart-hint" id="analysis-hint">💡 그래프를 탭하면 더 자세히 볼 수 있어요</div>
+  </div>
+
+  <div class="range-guide">
+    <div class="rg-item"><div class="rg-dot" style="background:var(--safe)"></div>정상 (공복&lt;100 / 식후&lt;140)</div>
+    <div class="rg-item"><div class="rg-dot" style="background:var(--warn)"></div>주의</div>
+    <div class="rg-item"><div class="rg-dot" style="background:var(--danger)"></div>위험</div>
+  </div>
+
+</div><!-- /analysis -->
+
+<!-- ===== 알람 페이지 ===== -->
+<div id="page-alarm" class="page">
+  <div class="card">
+    <div class="card-title">⏰ 알람 추가</div>
+    <div class="input-grid" style="margin-bottom:8px;">
+      <div class="input-group"><label>알람 시간</label><input type="time" id="alarm-time-inp" class="inp"></div>
+      <div class="input-group">
+        <label>측정 시점 (알람 후 기록)</label>
+        <select id="alarm-tag-inp" class="inp">
+          <option value="공복">아침 기상공복</option><option value="식전">식전</option>
+          <option value="식후2">식후 2시간</option><option value="취침전">취침전</option>
+        </select>
+      </div>
+    </div>
+    <div class="input-group" style="margin-bottom:12px;">
+      <label>알람 후 할 일 메모 <span style="font-weight:400;color:var(--muted)">(알람이 울리면 표시돼요)</span></label>
+      <input type="text" class="inp inp-text" id="alarm-note-inp" placeholder="예: 기상 혈당 재고 기록하자 화이팅!">
+    </div>
+    <button class="btn btn-red" onclick="addAlarm()">+ 알람 추가</button>
+  </div>
+  <div class="card">
+    <div class="card-title">알람 목록</div>
+    <div id="alarm-list"><div class="empty">설정된 알람이 없어요</div></div>
+  </div>
+</div><!-- /alarm -->
+
+<!-- ── 수정 모달 (혈당) ── -->
+<div class="modal-overlay" id="edit-g-modal" onclick="closeEditGModal(event)">
+  <div class="modal-box">
+    <h3>✏️ 혈당 기록 수정</h3>
+    <input type="hidden" id="modal-g-id">
+    <div class="input-grid">
+      <div class="input-group"><label>시간</label><input type="time" id="modal-g-time" class="inp"></div>
+      <div class="input-group">
+        <label>혈당 (mg/dL)</label>
+        <input type="number" id="modal-g-val" min="40" max="600" class="inp">
+      </div>
+    </div>
+    <div class="input-group" style="margin-bottom:10px;">
+      <label>측정 시점</label>
+      <select id="modal-g-status" class="inp">
+        <option value="공복">아침 기상공복</option><option value="식전">식전</option>
+        <option value="식후2">식후 2시간</option><option value="취침전">취침전</option>
+      </select>
+    </div>
+    <div class="period-check-row">
+      <span>🌸 생리 중</span><input type="checkbox" id="modal-g-period">
+    </div>
+    <div class="input-group" style="margin-bottom:14px;">
+      <label>📝 메모 <span style="font-weight:400;color:var(--muted)">(일기처럼 짧게)</span></label>
+      <textarea id="modal-g-memo" class="inp inp-text" rows="3" placeholder="오늘 밥을 좀 많이 먹었다..." style="resize:none;line-height:1.5;"></textarea>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeEditGModal()">취소</button>
+      <button class="btn-save" onclick="saveEditG()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 수정 모달 (체중) ── -->
+<div class="modal-overlay" id="edit-w-modal" onclick="closeEditWModal(event)">
+  <div class="modal-box">
+    <h3>✏️ 체중 기록 수정</h3>
+    <input type="hidden" id="modal-w-id">
+    <div class="input-grid" style="margin-bottom:8px;">
+      <div class="input-group"><label>체중 (kg)</label><input type="number" id="modal-w-weight" step="0.1" class="inp"></div>
+      <div class="input-group"><label>지방 (kg)</label><input type="number" id="modal-w-fat" step="0.1" class="inp"></div>
+    </div>
+    <div class="input-group" style="margin-bottom:12px;">
+      <label>근육 (kg)</label><input type="number" id="modal-w-muscle" step="0.1" class="inp">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeEditWModal()">취소</button>
+      <button class="btn-save" onclick="saveEditW()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 알람 울림 모달 ── -->
+<div class="alarm-modal" id="alarm-fire-modal">
+  <div class="alarm-fire-box">
+    <div class="alarm-icon">⏰</div>
+    <div class="alarm-msg" id="alarm-fire-msg">알람이에요!</div>
+    <div class="alarm-sub" id="alarm-fire-sub"></div>
+    <button class="btn-dismiss" onclick="dismissAlarm()">확인 — 혈당 재러 가기! 💪</button>
+    <button class="btn-snooze" onclick="snoozeAlarm()">5분 후 다시 알림</button>
+  </div>
+</div>
+
+<!-- ── 생리기간 수정 모달 ── -->
+<div class="modal-overlay" id="edit-period-modal" onclick="closeEditPeriodModal(event)">
+  <div class="modal-box">
+    <h3>🌸 생리기간 수정</h3>
+    <input type="hidden" id="modal-period-id">
+    <div class="input-grid">
+      <div class="input-group"><label>시작일</label><input type="date" id="modal-period-start" class="inp"></div>
+      <div class="input-group"><label>종료일 (진행 중이면 비워도 돼요)</label><input type="date" id="modal-period-end" class="inp"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeEditPeriodModal()">취소</button>
+      <button class="btn-save" onclick="saveEditPeriod()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 30분 완료 모달 ── -->
+<div class="alarm-modal" id="timer-30-modal">
+  <div class="alarm-fire-box">
+    <div class="alarm-icon">🍱</div>
+    <div class="alarm-msg">식사 마무리할 시간이에요!</div>
+    <div class="alarm-sub">30분이 지났어요. 천천히 마무리해요 😊</div>
+    <button class="btn-dismiss" onclick="dismiss30Modal()">확인</button>
+  </div>
+</div>
+
+<!-- ── 2시간 완료 모달 ── -->
+<div class="alarm-modal" id="timer-done-modal">
+  <div class="alarm-fire-box">
+    <div class="alarm-icon">🩸</div>
+    <div class="alarm-msg">식후 2시간 혈당 재야해요.<br>화이팅 ❤️</div>
+    <div class="alarm-sub" id="timer-done-sub"></div>
+    <button class="btn-dismiss" onclick="dismissTimerModal()">확인 — 혈당 기록하러 가기!</button>
+    <button class="btn-snooze" onclick="snoozeTimerModal()">10분 후 다시 알림</button>
+  </div>
+</div>
+
+<!-- ── 빠른 기록 모달 ── -->
+<div class="quick-modal" id="quick-modal">
+  <div class="modal-box">
+    <h3>🩸 혈당 빠른 기록</h3>
+    <div class="qr-time" id="qr-time"></div>
+    <div class="input-grid">
+      <div class="input-group"><label>혈당 (mg/dL)</label><input type="number" id="qr-val" placeholder="예: 110" min="40" max="600" class="inp"></div>
+      <div class="input-group">
+        <label>측정 시점</label>
+        <select id="qr-tag" class="inp">
+          <option value="공복">아침 기상공복</option><option value="식전">식전</option>
+          <option value="식후2">식후 2시간</option><option value="취침전">취침전</option>
+        </select>
+      </div>
+    </div>
+    <div class="period-check-row">
+      <span>🌸 생리 중</span><input type="checkbox" id="qr-period">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeQuickModal()">나중에</button>
+      <button class="btn-save" onclick="saveQuickRecord()">저장!</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 스토리지 키 ──────────────────────────────────────────
+const KEY_SUGAR   = 'bsm_sugar_v1';
+const KEY_WEIGHT  = 'bsm_weight_v1';
+const KEY_PERIOD  = 'bsm_period_v1';
+const KEY_ALARM   = 'bsm_alarm_v1';
+const KEY_TIMER_H = 'bsm_timer_h_v1';
+
+let dbSugar     = [];
+let dbWeight    = [];
+let periodData  = { active: null, history: [] };
+let alarms      = [];
+let timerHistory= [];
+let myChart     = null;
+let selectedDate= new Date();
+let tempPhoto   = '';
+let timerInterval = null;
+let currentAlarmFiring = null;
+let qrTimeInterval = null;
+
+// ── 초기화 ───────────────────────────────────────────────
+window.onload = () => {
+  try { dbSugar    = JSON.parse(localStorage.getItem(KEY_SUGAR)   || '[]'); } catch(e){}
+  try { dbWeight   = JSON.parse(localStorage.getItem(KEY_WEIGHT)  || '[]'); } catch(e){}
+  try { periodData = JSON.parse(localStorage.getItem(KEY_PERIOD)  || '{"active":null,"history":[]}'); } catch(e){}
+  try { alarms     = JSON.parse(localStorage.getItem(KEY_ALARM)   || '[]'); } catch(e){}
+  try { timerHistory=JSON.parse(localStorage.getItem(KEY_TIMER_H) || '[]'); } catch(e){}
+
+  const now = new Date();
+  document.getElementById('w-date').value  = toDateStr(now);
+  document.getElementById('g-date').value  = toDateStr(now);
+  document.getElementById('g-time').value  = toTimeStr(now);
+
+  renderHistory(); renderPeriodUI(); renderAlarmList(); renderTimerHistory(); renderStats();
+  setInterval(checkAlarms, 30000); checkAlarms();
+  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+
+  // 사용자 이름 불러오기
+  const savedName = localStorage.getItem('bsm_username') || '';
+  const nameInput = document.getElementById('user-name-input');
+  if (nameInput) nameInput.value = savedName;
+};
+
+function saveUserName(val) {
+  localStorage.setItem('bsm_username', val.trim());
+}
+
+const saveSugarDB  = () => localStorage.setItem(KEY_SUGAR,   JSON.stringify(dbSugar));
+const saveWeightDB = () => localStorage.setItem(KEY_WEIGHT,  JSON.stringify(dbWeight));
+const savePeriodDB = () => localStorage.setItem(KEY_PERIOD,  JSON.stringify(periodData));
+const saveAlarmsDB = () => localStorage.setItem(KEY_ALARM,   JSON.stringify(alarms));
+const saveTimerHDB = () => localStorage.setItem(KEY_TIMER_H, JSON.stringify(timerHistory));
+
+function toDateStr(d) { return d.toISOString().slice(0,10); }
+function toTimeStr(d) { return d.toTimeString().slice(0,5); }
+function today() { return toDateStr(new Date()); }
+
+// ── 페이지 전환 ──────────────────────────────────────────
+function switchPage(page, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  btn.classList.add('active');
+  if (page === 'analysis') renderAnalysis('week');
+}
+
+// ── 혈당 상태 계산 ────────────────────────────────────────
+function getSugarStatus(val, type) {
+  if (!val || isNaN(val)) return { s: '-', c: '#ccc', cls: '' };
+  if (type === '공복' || type === '취침전') {
+    if (val >= 126) return { s: '위험', c: '#c0392b', cls: 'danger' };
+    if (val >= 100) return { s: '주의', c: '#e67e22', cls: 'warn' };
+    return { s: '정상', c: '#27ae60', cls: 'safe' };
+  } else {
+    if (val >= 200) return { s: '위험', c: '#c0392b', cls: 'danger' };
+    if (val >= 140) return { s: '주의', c: '#e67e22', cls: 'warn' };
+    return { s: '정상', c: '#27ae60', cls: 'safe' };
+  }
+}
+
+function checkSugarStatus() {
+  const val  = parseInt(document.getElementById('g-val').value);
+  const type = document.getElementById('g-status').value;
+  const badge = document.getElementById('sugar-badge');
+  if (!val || isNaN(val)) { badge.style.display = 'none'; return; }
+  const res = getSugarStatus(val, type);
+  badge.style.display = 'flex';
+  badge.style.background = res.c;
+  badge.textContent = res.s;
+}
+
+// ── 체중 기록 ────────────────────────────────────────────
+function saveWeight() {
+  const date = document.getElementById('w-date').value;
+  const w    = parseFloat(document.getElementById('w-weight').value);
+  const f    = parseFloat(document.getElementById('w-fat').value);
+  const m    = parseFloat(document.getElementById('w-muscle').value);
+  if (!date || isNaN(w)) { alert('날짜와 체중을 입력해주세요.'); return; }
+  const id = document.getElementById('edit-w-id').value;
+  const fatPct = (!isNaN(f) && !isNaN(w) && w > 0) ? Math.round(f/w*1000)/10 : null;
+  const entry = { id: id ? parseInt(id) : Date.now(), type:'WEIGHT', date, w, f: isNaN(f)?null:f, m: isNaN(m)?null:m, fatPct };
+  if (id) { dbWeight = dbWeight.map(x => x.id === entry.id ? entry : x); }
+  else {
+    const existing = dbWeight.findIndex(x => x.date === date);
+    if (existing !== -1) { if (!confirm(date + ' 체중 기록이 이미 있어요. 덮어쓸까요?')) return; dbWeight[existing] = { ...dbWeight[existing], ...entry, id: dbWeight[existing].id }; }
+    else dbWeight.push(entry);
+  }
+  dbWeight.sort((a,b)=>a.date.localeCompare(b.date));
+  saveWeightDB(); resetW(); renderHistory(); renderStats();
+  // 체지방률 자동 계산 표시
+  if (!isNaN(f) && !isNaN(w) && w > 0) document.getElementById('w-fat-pct').value = (f/w*100).toFixed(1);
+}
+
+function resetW() {
+  document.getElementById('edit-w-id').value = '';
+  ['w-weight','w-fat','w-muscle'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('w-fat-pct').value = '';
+}
+
+// 체지방률 자동 계산
+document.addEventListener('DOMContentLoaded', () => {});
+function calcFatPct() {
+  const w = parseFloat(document.getElementById('w-weight').value);
+  const f = parseFloat(document.getElementById('w-fat').value);
+  if (!isNaN(w) && !isNaN(f) && w > 0) document.getElementById('w-fat-pct').value = (f/w*100).toFixed(1);
+  else document.getElementById('w-fat-pct').value = '';
+}
+// 체중/지방 입력 시 자동 계산 이벤트
+window.addEventListener('load', () => {
+  ['w-weight','w-fat'].forEach(id => document.getElementById(id)?.addEventListener('input', calcFatPct));
+});
+
+// ── 혈당 기록 ────────────────────────────────────────────
+function saveSugar() {
+  const date   = document.getElementById('g-date').value;
+  const time   = document.getElementById('g-time').value;
+  const val    = parseInt(document.getElementById('g-val').value);
+  const status = document.getElementById('g-status').value;
+  const period = document.getElementById('g-period').checked;
+  const id     = document.getElementById('edit-g-id').value;
+  if (!date || !time || isNaN(val) || val < 40 || val > 600) { alert('날짜, 시간, 혈당 수치(40~600)를 올바르게 입력해주세요.'); return; }
+  const res = getSugarStatus(val, status);
+  const entry = { id: id ? parseInt(id) : Date.now(), type:'SUGAR', date, time, val, status, analysis: res.s, analysisCol: res.c, analysisCls: res.cls, period, photo: tempPhoto };
+  if (id) { dbSugar = dbSugar.map(x => x.id === entry.id ? entry : x); }
+  else { dbSugar.push(entry); }
+  dbSugar.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
+  saveSugarDB(); resetG(); renderHistory(); renderStats();
+}
+
+function resetG() {
+  document.getElementById('edit-g-id').value = '';
+  document.getElementById('g-val').value = '';
+  document.getElementById('g-period').checked = false;
+  document.getElementById('sugar-badge').style.display = 'none';
+  tempPhoto = '';
+}
+
+function deleteSugar(id) { dbSugar = dbSugar.filter(x => x.id !== id); saveSugarDB(); renderHistory(); renderStats(); }
+function deleteWeight(id) { dbWeight = dbWeight.filter(x => x.id !== id); saveWeightDB(); renderHistory(); }
+
+// ── 모달 수정 (혈당) ─────────────────────────────────────
+function openEditG(id) {
+  const item = dbSugar.find(x => x.id === id); if (!item) return;
+  document.getElementById('modal-g-id').value      = item.id;
+  document.getElementById('modal-g-time').value    = item.time;
+  document.getElementById('modal-g-val').value     = item.val;
+  document.getElementById('modal-g-status').value  = item.status;
+  document.getElementById('modal-g-period').checked= item.period;
+  document.getElementById('modal-g-memo').value    = item.memo || '';
+  document.getElementById('edit-g-modal').classList.add('open');
+}
+function closeEditGModal(e) {
+  if (e && e.target !== document.getElementById('edit-g-modal')) return;
+  document.getElementById('edit-g-modal').classList.remove('open');
+}
+function saveEditG() {
+  const id     = parseInt(document.getElementById('modal-g-id').value);
+  const time   = document.getElementById('modal-g-time').value;
+  const val    = parseInt(document.getElementById('modal-g-val').value);
+  const status = document.getElementById('modal-g-status').value;
+  const period = document.getElementById('modal-g-period').checked;
+  if (!time || isNaN(val) || val < 40 || val > 600) { alert('시간과 혈당 수치를 올바르게 입력해주세요.'); return; }
+  const memo  = document.getElementById('modal-g-memo').value.trim();
+  const res = getSugarStatus(val, status);
+  const idx = dbSugar.findIndex(x => x.id === id);
+  if (idx !== -1) { dbSugar[idx] = { ...dbSugar[idx], time, val, status, analysis: res.s, analysisCol: res.c, analysisCls: res.cls, period, memo }; dbSugar.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)); saveSugarDB(); renderHistory(); renderStats(); }
+  document.getElementById('edit-g-modal').classList.remove('open');
+}
+
+// ── 모달 수정 (체중) ─────────────────────────────────────
+function openEditW(id) {
+  const item = dbWeight.find(x => x.id === id); if (!item) return;
+  document.getElementById('modal-w-id').value     = item.id;
+  document.getElementById('modal-w-weight').value = item.w;
+  document.getElementById('modal-w-fat').value    = item.f || '';
+  document.getElementById('modal-w-muscle').value = item.m || '';
+  document.getElementById('edit-w-modal').classList.add('open');
+}
+function closeEditWModal(e) {
+  if (e && e.target !== document.getElementById('edit-w-modal')) return;
+  document.getElementById('edit-w-modal').classList.remove('open');
+}
+function saveEditW() {
+  const id = parseInt(document.getElementById('modal-w-id').value);
+  const w  = parseFloat(document.getElementById('modal-w-weight').value);
+  const f  = parseFloat(document.getElementById('modal-w-fat').value);
+  const m  = parseFloat(document.getElementById('modal-w-muscle').value);
+  if (isNaN(w)) { alert('체중을 입력해주세요.'); return; }
+  const idx = dbWeight.findIndex(x => x.id === id);
+  if (idx !== -1) {
+    const fatPct = (!isNaN(f) && !isNaN(w) && w > 0) ? Math.round(f/w*1000)/10 : null;
+    dbWeight[idx] = { ...dbWeight[idx], w, f: isNaN(f)?null:f, m: isNaN(m)?null:m, fatPct };
+    saveWeightDB(); renderHistory();
+  }
+  document.getElementById('edit-w-modal').classList.remove('open');
+}
+
+// ── 기록 렌더 ─────────────────────────────────────────────
+function renderHistory() {
+  const el = document.getElementById('history-list');
+  const combined = [...dbSugar.map(x=>({...x,_t:'S'})), ...dbWeight.map(x=>({...x,_t:'W'}))].sort((a,b)=>b.id-a.id);
+  if (!combined.length) { el.innerHTML = '<div class="empty">아직 기록이 없습니다.</div>'; return; }
+
+  const dayNames = ['일','월','화','수','목','금','토'];
+  const grouped = {};
+  combined.forEach(item => {
+    const k = item.date; if (!grouped[k]) grouped[k]=[]; grouped[k].push(item);
+  });
+  el.innerHTML = Object.keys(grouped).sort().reverse().map(date => {
+    const d = new Date(date+'T00:00:00');
+    const isToday = date === today();
+    const hasPeriod = isInPeriod(date);
+    const dateLbl = date+' ('+dayNames[d.getDay()]+')'+(isToday?' · 오늘':'')+(hasPeriod?' 🩸':'');
+    return `<div class="date-header ${isToday?'today':''}">${dateLbl}</div>` +
+      grouped[date].map(item => {
+        if (item._t === 'S') return `
+          <div class="list-item" onclick="openEditG(${item.id})" style="flex-direction:column;align-items:stretch;gap:6px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div><div class="list-label">${item.status} · ${item.time}${item.period?' 🌸':''}</div></div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="list-val ${item.analysisCls||''}">${item.val}<span style="font-size:11px;font-weight:400"> mg/dL</span></span>
+                <span class="tag" style="background:${item.analysisCol}">${item.analysis}</span>
+                <button class="list-del" onclick="event.stopPropagation();deleteSugar(${item.id})">✕</button>
+              </div>
+            </div>
+            ${item.memo ? '<div style="font-size:12px;color:var(--muted);padding:4px 2px;border-top:1px solid var(--border);line-height:1.5;">📝 '+item.memo+'</div>' : ''}
+          </div>`;
+        return `
+          <div class="list-item" onclick="openEditW(${item.id})">
+            <div><div class="list-label">⚖️ 체중</div></div>
+            <div style="font-size:14px;font-weight:700;font-family:'DM Mono',monospace;">
+              ${item.w}kg${item.f ? ' · 지방 '+item.f+'kg' : ''}${item.m ? ' · 근육 '+item.m+'kg' : ''}${item.fatPct ? ' · <span style="color:var(--blue);font-size:12px;">체지방률 '+item.fatPct+'%</span>' : ''}
+            </div>
+            <button class="list-del" onclick="event.stopPropagation();deleteWeight(${item.id})">✕</button>
+          </div>`;
+      }).join('');
+  }).join('');
+}
+
+function renderStats() {
+  const todayRecs = dbSugar.filter(r => r.date === today());
+  if (!todayRecs.length) { ['s-avg','s-min','s-max'].forEach(id=>document.getElementById(id).textContent='—'); return; }
+  const vals = todayRecs.map(r=>r.val);
+  document.getElementById('s-avg').textContent = Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
+  document.getElementById('s-min').textContent = Math.min(...vals);
+  document.getElementById('s-max').textContent = Math.max(...vals);
+}
+
+// ── 생리기간 ─────────────────────────────────────────────
+function startPeriod() {
+  const t = today();
+  if (periodData.active) { alert('이미 진행 중이에요 (' + periodData.active.start + ' ~)'); return; }
+  periodData.active = { id: Date.now(), start: t, end: null };
+  savePeriodDB(); renderPeriodUI();
+}
+function endPeriod() {
+  const t = today();
+  if (!periodData.active) { alert('시작 기록이 없어요. 먼저 하는 중을 눌러주세요.'); return; }
+  periodData.active.end = t;
+  periodData.history.unshift({ ...periodData.active });
+  periodData.active = null;
+  savePeriodDB(); renderPeriodUI();
+}
+
+function deletePeriod(id) {
+  // active인지 확인
+  if (periodData.active && periodData.active.id === id) { periodData.active = null; }
+  else { periodData.history = periodData.history.filter(p=>p.id!==id); }
+  savePeriodDB(); renderPeriodUI();
+}
+
+function openEditPeriod(id) {
+  let entry = null;
+  if (periodData.active && periodData.active.id === id) entry = periodData.active;
+  else entry = periodData.history.find(p=>p.id===id);
+  if (!entry) return;
+  document.getElementById('modal-period-id').value    = id;
+  document.getElementById('modal-period-start').value = entry.start;
+  document.getElementById('modal-period-end').value   = entry.end || '';
+  document.getElementById('edit-period-modal').classList.add('open');
+}
+
+function closeEditPeriodModal(e) {
+  if (e && e.target !== document.getElementById('edit-period-modal')) return;
+  document.getElementById('edit-period-modal').classList.remove('open');
+}
+
+function saveEditPeriod() {
+  const id    = parseInt(document.getElementById('modal-period-id').value);
+  const start = document.getElementById('modal-period-start').value;
+  const end   = document.getElementById('modal-period-end').value;
+  if (!start) { alert('시작일을 입력해주세요.'); return; }
+  if (end && end < start) { alert('종료일이 시작일보다 앞에 있어요.'); return; }
+
+  // active인지 history인지 확인 후 수정
+  if (periodData.active && periodData.active.id === id) {
+    periodData.active.start = start;
+    periodData.active.end   = end || null;
+    // 종료일 입력됐으면 history로 이동
+    if (end) {
+      periodData.history.unshift({ ...periodData.active });
+      periodData.history.sort((a,b)=>b.start.localeCompare(a.start));
+      periodData.active = null;
+    }
+  } else {
+    const idx = periodData.history.findIndex(p=>p.id===id);
+    if (idx !== -1) {
+      periodData.history[idx] = { ...periodData.history[idx], start, end: end || null };
+      // 종료일 없으면 active로 이동
+      if (!end) {
+        if (periodData.active) periodData.history.unshift({ ...periodData.active });
+        periodData.active = { ...periodData.history[idx] };
+        periodData.history.splice(idx, 1);
+      }
+      periodData.history.sort((a,b)=>b.start.localeCompare(a.start));
+    }
+  }
+  savePeriodDB(); renderPeriodUI();
+  document.getElementById('edit-period-modal').classList.remove('open');
+}
+
+function renderPeriodUI() {
+  // 오늘 날짜 표시
+  const todayDisp = document.getElementById('period-today-display');
+  if (todayDisp) {
+    const d = new Date();
+    const dayNames = ['일','월','화','수','목','금','토'];
+    todayDisp.textContent = '오늘: ' + toDateStr(d) + ' (' + dayNames[d.getDay()] + ')';
+  }
+  // 현재 상태
+  const el = document.getElementById('period-status');
+  if (periodData.active) {
+    el.textContent = '🩸 진행 중 (' + periodData.active.start + ' ~)';
+    el.className = 'period-status active';
+  } else {
+    el.textContent = '현재 생리 기간이 아니에요';
+    el.className = 'period-status';
+  }
+  // 기록 목록 (클릭하면 수정)
+  const histEl = document.getElementById('period-history');
+  const allEntries = [];
+  if (periodData.active) allEntries.push({ ...periodData.active, _active: true });
+  allEntries.push(...periodData.history.slice(0, 10));
+
+  if (!allEntries.length) { histEl.innerHTML = ''; return; }
+  histEl.innerHTML = '<div style="font-size:11px;color:var(--muted);margin:10px 0 6px;">기록 목록 · 탭하면 수정</div>' +
+    allEntries.map(p => {
+      const endTxt = p.end ? p.end : '<span style="color:var(--period);font-weight:700;">진행 중</span>';
+      return '<div class="period-hist-item" onclick="openEditPeriod(' + p.id + ')" style="cursor:pointer;">' +
+        '<span style="color:var(--period);margin-right:6px;">🩸</span>' +
+        '<span style="flex:1;font-size:13px;">' + p.start + ' ~ ' + endTxt + '</span>' +
+        '<button class="period-del" onclick="event.stopPropagation();deletePeriod(' + p.id + ')">✕</button>' +
+        '</div>';
+    }).join('');
+}
+function isInPeriod(dateStr) {
+  const all = [...periodData.history]; if (periodData.active) all.push(periodData.active);
+  return all.some(p => p.end ? dateStr>=p.start&&dateStr<=p.end : dateStr>=p.start);
+}
+
+// ── 타이머 ────────────────────────────────────────────────
+function previewImage(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => { const img = document.getElementById('photo-preview'); img.src=e.target.result; img.style.display='block'; tempPhoto=e.target.result; label.textContent='🖼️ 사진 변경'; };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+function startMealTimer() {
+  if (timerInterval) return;
+  const memo = document.getElementById('meal-memo').value || '식사';
+  let s30 = 30 * 60, s120 = 120 * 60;
+  const total30 = 30*60, total120 = 120*60;
+  let fired30 = false;
+
+  // 타이머 UI 표시
+  document.getElementById('timer-ui').style.display = 'block';
+  document.getElementById('btn-timer-start').textContent = '⏳ 진행 중...';
+  document.getElementById('btn-timer-start').disabled = true;
+  document.getElementById('timer-120-display').style.color = 'var(--accent)';
+
+  timerHistory.unshift({ start: toTimeStr(new Date()), memo, date: today() });
+  if (timerHistory.length > 10) timerHistory.pop();
+  saveTimerHDB(); renderTimerHistory();
+
+  timerInterval = setInterval(() => {
+    // 30분 타이머
+    if (s30 > 0) {
+      s30--;
+      const m = Math.floor(s30/60), s = s30%60;
+      document.getElementById('timer-30-display').textContent = String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+      document.getElementById('bar-30').style.width = (s30/total30*100)+'%';
+    }
+    if (s30 === 0 && !fired30) {
+      fired30 = true;
+      playBeep(660, 800);
+      document.getElementById('timer-30-modal').classList.add('open');
+    }
+
+    // 2시간 타이머
+    if (s120 > 0) {
+      s120--;
+      const h = Math.floor(s120/3600), m = Math.floor((s120%3600)/60), s = s120%60;
+      document.getElementById('timer-120-display').textContent = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+      document.getElementById('bar-120').style.width = (s120/total120*100)+'%';
+    }
+    if (s120 === 0) {
+      clearInterval(timerInterval); timerInterval = null;
+      resetTimerUI();
+      document.getElementById('timer-done-sub').textContent = memo ? '"'+memo+'" 식후 혈당을 기록해봐요' : '식후 혈당을 기록해봐요';
+      document.getElementById('timer-done-modal').classList.add('open');
+      playBeep(880, 1000);
+    }
+  }, 1000);
+}
+
+function dismiss30Modal() {
+  document.getElementById('timer-30-modal').classList.remove('open');
+}
+
+function cancelTimer() {
+  clearInterval(timerInterval); timerInterval = null;
+  resetTimerUI();
+}
+
+function resetTimerUI() {
+  document.getElementById('timer-ui').style.display = 'none';
+  document.getElementById('timer-120-display').textContent = '02:00:00';
+  document.getElementById('timer-120-display').style.color = '';
+  document.getElementById('timer-30-display').textContent = '30:00';
+  document.getElementById('bar-120').style.width = '100%';
+  document.getElementById('bar-30').style.width = '100%';
+  document.getElementById('btn-timer-start').textContent = '🍚 식사 시작';
+  document.getElementById('btn-timer-start').disabled = false;
+}
+
+function dismissTimerModal() {
+  document.getElementById('timer-done-modal').classList.remove('open');
+  // 기록 탭으로 이동
+  const recordBtn = document.querySelector('.nav-tab[onclick*="record"]');
+  switchPage('record', recordBtn);
+  // 혈당 입력 시간 자동 세팅 + 측정시점 식후2로
+  document.getElementById('g-time').value = toTimeStr(new Date());
+  document.getElementById('g-status').value = '식후2';
+  // 입력 카드로 스크롤
+  setTimeout(() => document.querySelector('.card').scrollIntoView({ behavior: 'smooth' }), 100);
+}
+function snoozeTimerModal() {
+  document.getElementById('timer-done-modal').classList.remove('open');
+  setTimeout(()=>{ document.getElementById('timer-done-modal').classList.add('open'); playBeep(880,1000); }, 10*60*1000);
+}
+
+function renderTimerHistory() {
+  const card = document.getElementById('timer-recent');
+  const el   = document.getElementById('timer-history-list');
+  if (!timerHistory.length) { card.style.display='none'; return; }
+  card.style.display = 'block';
+  el.innerHTML = timerHistory.map((t, i) =>
+    '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);gap:8px;">' +
+      '<div style="flex:1;font-size:12px;color:var(--muted);">' + t.date + ' ' + t.start + ' — ' + (t.memo||'식사') + '</div>' +
+      '<button onclick="openEditTimerRecord(' + i + ')" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:12px;padding:2px 6px;">수정</button>' +
+      '<button onclick="deleteTimerRecord(' + i + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 6px;">✕</button>' +
+    '</div>'
+  ).join('');
+}
+
+function openEditTimerRecord(idx) {
+  const t = timerHistory[idx];
+  if (!t) return;
+  document.getElementById('modal-timer-idx').value   = idx;
+  document.getElementById('modal-timer-date').value  = t.date;
+  document.getElementById('modal-timer-start').value = t.start;
+  document.getElementById('modal-timer-memo').value  = t.memo || '';
+  document.getElementById('edit-timer-modal').classList.add('open');
+}
+
+function closeEditTimerModal(e) {
+  if (e && e.target !== document.getElementById('edit-timer-modal')) return;
+  document.getElementById('edit-timer-modal').classList.remove('open');
+}
+
+function saveEditTimer() {
+  const idx   = parseInt(document.getElementById('modal-timer-idx').value);
+  const date  = document.getElementById('modal-timer-date').value;
+  const start = document.getElementById('modal-timer-start').value;
+  const memo  = document.getElementById('modal-timer-memo').value.trim();
+  if (!date || !start) { alert('날짜와 시간을 입력해주세요.'); return; }
+  timerHistory[idx] = { ...timerHistory[idx], date, start, memo };
+  saveTimerHDB(); renderTimerHistory();
+  document.getElementById('edit-timer-modal').classList.remove('open');
+}
+
+function deleteTimerRecord(idx) {
+  timerHistory.splice(idx, 1);
+  saveTimerHDB(); renderTimerHistory();
+}
+
+// ── 분석 차트 ─────────────────────────────────────────────
+function makePeriodPlugin(indexToDate) {
+  return {
+    id: 'periodBg',
+    beforeDraw(ch) {
+      const { ctx, chartArea: ca, scales } = ch;
+      if (!ca || !scales.x) return;
+      ctx.save();
+      const xScale = scales.x;
+      const count = xScale.max - xScale.min;
+      const step = count > 0 ? (ca.right - ca.left) / count : (ca.right - ca.left);
+      for (let i = xScale.min; i <= xScale.max; i++) {
+        const dateStr = indexToDate(i);
+        if (!dateStr || !isInPeriod(dateStr)) continue;
+        const xCenter = xScale.getPixelForValue(i);
+        const x0 = xCenter - step/2;
+        ctx.fillStyle = 'rgba(233,30,140,0.5)';
+        ctx.fillRect(x0, ca.bottom-7, step, 7);
+        ctx.fillStyle = 'rgba(233,30,140,0.06)';
+        ctx.fillRect(x0, ca.top, step, ca.bottom-ca.top-7);
+      }
+      ctx.restore();
+    }
+  };
+}
+
+let currentAnalysisMode = 'week';
+
+// ── 이전/다음 기간 이동 ──────────────────────────────────
+function shiftPeriod(dir) {
+  const d = new Date(selectedDate);
+  if (currentAnalysisMode === 'day') {
+    d.setDate(d.getDate() + dir);
+  } else if (currentAnalysisMode === 'week') {
+    d.setDate(d.getDate() + dir * 7);
+  } else {
+    // 월간: 한 달 단위
+    d.setMonth(d.getMonth() + dir);
+  }
+  renderAnalysis(currentAnalysisMode, d);
+}
+
+// ── 스와이프 감지 ────────────────────────────────────────
+(function initSwipe() {
+  let touchStartX = 0;
+  document.addEventListener('touchstart', e => {
+    const card = document.getElementById('analysis-card');
+    if (card && card.contains(e.target)) touchStartX = e.touches[0].clientX;
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    const card = document.getElementById('analysis-card');
+    if (!card || !card.contains(e.target)) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 45) shiftPeriod(dx < 0 ? 1 : -1);
+  }, { passive: true });
+})();
+
+function renderAnalysis(mode, targetDate) {
+  // 탭 전환이면 오늘 기준으로, 같은 탭이면 현재 selectedDate 유지
+  if (targetDate === undefined) {
+    targetDate = (mode !== currentAnalysisMode) ? new Date() : new Date(selectedDate);
+  }
+  currentAnalysisMode = mode;
+  selectedDate = new Date(targetDate);
+
+  document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + mode).classList.add('active');
+
+  const titleEl  = document.getElementById('analysis-title');
+  const hintEl   = document.getElementById('analysis-hint');
+  const legendEl = document.getElementById('analysis-legend');
+  const nextBtn  = document.getElementById('btn-period-next');
+  const todayStr = toDateStr(new Date());
+  let labels=[], sData=[], wData=[], fData=[], mData=[], colors=[], meta=[], datesForPeriod=[];
+
+  if (mode === 'day') {
+    const iso = toDateStr(selectedDate);
+    titleEl.textContent = iso;
+    hintEl.style.display = 'none';
+    legendEl.style.display = 'none';
+    if (nextBtn) nextBtn.disabled = (iso >= todayStr);
+
+    const filtered = dbSugar.filter(s=>s.date===iso).sort((a,b)=>a.time.localeCompare(b.time));
+    labels = filtered.map(s=>s.time);
+    sData  = filtered.map(s=>s.val);
+    colors = filtered.map(s=>s.analysisCol);
+    meta   = filtered.map(s=>new Date(s.date));
+    datesForPeriod = filtered.map(s=>s.date);
+    if (!filtered.length) titleEl.textContent = iso + ' — 기록 없음';
+
+  } else if (mode === 'week') {
+    // 월요일 기준 주
+    const dow = selectedDate.getDay();
+    const monday = new Date(selectedDate);
+    monday.setDate(selectedDate.getDate() - (dow === 0 ? 6 : dow - 1));
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    const monStr = toDateStr(monday), sunStr = toDateStr(sunday);
+    titleEl.textContent = monStr.slice(5) + ' ~ ' + sunStr.slice(5);
+    hintEl.textContent = '← → 또는 스와이프로 주 이동 · 점 탭하면 일간 상세';
+    hintEl.style.display = 'block';
+    legendEl.style.display = 'none';
+    if (nextBtn) nextBtn.disabled = (monStr >= todayStr.slice(0,7) + '-01');
+
+    for (let i=0;i<7;i++) {
+      const d = new Date(monday); d.setDate(monday.getDate()+i);
+      const iso = toDateStr(d);
+      labels.push(['월','화','수','목','금','토','일'][i]);
+      const ds = dbSugar.filter(s=>s.date===iso);
+      sData.push(ds.length ? Math.round(ds.reduce((a,b)=>a+b.val,0)/ds.length) : null);
+      const dw = dbWeight.find(w=>w.date===iso);
+      wData.push(dw?dw.w:null); fData.push(dw?dw.f:null); mData.push(dw?dw.m:null);
+      colors.push('#e91e8c'); meta.push(new Date(d)); datesForPeriod.push(iso);
+    }
+
+  } else {
+    // 월간: selectedDate 기준 해당 달, 주차별
+    const year = selectedDate.getFullYear(), month = selectedDate.getMonth();
+    titleEl.textContent = year + '년 ' + (month+1) + '월';
+    hintEl.textContent = '← → 또는 스와이프로 월 이동 · 점 탭하면 주간 상세';
+    hintEl.style.display = 'block';
+    legendEl.style.display = 'none';
+    const nowDate = new Date(); nowDate.setDate(1);
+    const selFirst = new Date(year, month, 1);
+    if (nextBtn) nextBtn.disabled = (selFirst >= nowDate);
+
+    // 해당 월의 첫날부터 마지막날까지 주차 분할
+    const firstDay = new Date(year, month, 1);
+    const lastDay  = new Date(year, month+1, 0);
+    // 첫 주의 월요일
+    let cur = new Date(firstDay);
+    const d0 = cur.getDay();
+    cur.setDate(cur.getDate() - (d0 === 0 ? 6 : d0 - 1));
+
+    let weekNum = 1;
+    while (cur <= lastDay) {
+      const wStart = new Date(cur);
+      const wEnd   = new Date(cur); wEnd.setDate(cur.getDate() + 6);
+      const wEndClamped = wEnd > lastDay ? lastDay : wEnd;
+
+      labels.push(weekNum + '주');
+      const ws = dbSugar.filter(s => s.date >= toDateStr(wStart) && s.date <= toDateStr(wEndClamped));
+      sData.push(ws.length ? Math.round(ws.reduce((a,b)=>a+b.val,0)/ws.length) : null);
+      const wws = dbWeight.filter(x => x.date >= toDateStr(wStart) && x.date <= toDateStr(wEndClamped));
+      wData.push(wws.length ? Math.round(wws.reduce((a,b)=>a+b.w,0)/wws.length*10)/10 : null);
+      const fws = wws.filter(x=>x.f!=null);
+      fData.push(fws.length ? Math.round(fws.reduce((a,b)=>a+(b.f||0),0)/fws.length*10)/10 : null);
+      mData.push(null);
+      colors.push('#e91e8c');
+      meta.push(new Date(wStart));
+      datesForPeriod.push(toDateStr(wStart));
+      cur.setDate(cur.getDate() + 7);
+      weekNum++;
+    }
+  }
+
+  drawAnalysisChart(labels, sData, wData, fData, mData, colors, mode, meta, datesForPeriod);
+}
+
+function drawAnalysisChart(labels, sData, wData, fData, mData, colors, mode, meta, datesForPeriod) {
+  if (!datesForPeriod) datesForPeriod = [];
+  if (myChart) { myChart.destroy(); myChart = null; }
+  const datasets = [
+    {
+      label:'혈당', data:sData,
+      borderColor:'#c0392b',
+      backgroundColor:'rgba(192,57,43,0.08)',
+      pointBackgroundColor: colors,
+      pointBorderColor: colors,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      yAxisID:'ySugar', tension:0.3,
+      fill: true,
+      type: 'line',
+      borderWidth: 2,
+      spanGaps: true,
+    },
+    { label:'체중', data:wData, borderColor:'#2980b9', borderDash:[5,4], pointRadius:3, yAxisID:'yWeight', tension:0.25, type:'line', fill:false, spanGaps:true },
+    { label:'지방', data:fData, borderColor:'#e67e22', borderDash:[3,3], pointRadius:0, yAxisID:'yWeight', tension:0.25, type:'line', fill:false, spanGaps:true },
+    { label:'근육', data:mData, borderColor:'#27ae60', borderDash:[3,3], pointRadius:0, yAxisID:'yWeight', tension:0.25, type:'line', fill:false, spanGaps:true },
+  ];
+
+  const periodPlugin = makePeriodPlugin(i => datesForPeriod[i] || null);
+
+  myChart = new Chart(document.getElementById('main-chart'), {
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { font: { family:'Noto Sans KR', size:11 }, boxWidth:10, padding:8 } },
+        tooltip: { callbacks: {
+          title: items => items[0].label,
+          label: c => { const u=c.dataset.yAxisID==='yWeight'?'kg':'mg/dL'; return ` ${c.dataset.label}: ${c.parsed.y!=null?c.parsed.y+' '+u:'없음'}`; }
+        }}
+      },
+      scales: {
+        ySugar:  { type:'linear', position:'left',  min:90, max:170, grid:{color:'#e8e4de'}, ticks:{font:{family:'DM Mono',size:10},color:'#8a8480'}, title:{display:true,text:'혈당(mg/dL)',font:{size:10}} },
+        yWeight: { type:'linear', position:'right', min:20, max:65,           grid:{drawOnChartArea:false}, ticks:{font:{family:'DM Mono',size:10},color:'#8a8480',callback:v=>v+'kg'}, title:{display:true,text:'kg',font:{size:10}} },
+        x: { grid:{color:'#f0ece8'}, ticks:{font:{family:'Noto Sans KR',size:11},color:'#8a8480'} }
+      },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        if (mode === 'month') renderAnalysis('week', meta[idx]);
+        else if (mode === 'week') renderAnalysis('day', meta[idx]);
+      }
+    },
+    plugins: [periodPlugin]
+  });
+}
+
+// ── 알람 ──────────────────────────────────────────────────
+function addAlarm() {
+  const time = document.getElementById('alarm-time-inp').value;
+  const note = document.getElementById('alarm-note-inp').value.trim();
+  const tag  = document.getElementById('alarm-tag-inp').value;
+  if (!time) { alert('알람 시간을 설정해주세요.'); return; }
+  alarms.push({ id:Date.now(), time, note, tag, on:true, lastFired:null });
+  alarms.sort((a,b)=>a.time.localeCompare(b.time));
+  saveAlarmsDB(); renderAlarmList();
+  document.getElementById('alarm-time-inp').value = '';
+  document.getElementById('alarm-note-inp').value = '';
+}
+function deleteAlarm(id) { alarms=alarms.filter(a=>a.id!==id); saveAlarmsDB(); renderAlarmList(); }
+function toggleAlarm(id) { const a=alarms.find(a=>a.id===id); if(a){a.on=!a.on; saveAlarmsDB(); renderAlarmList();} }
+function renderAlarmList() {
+  const el = document.getElementById('alarm-list');
+  if (!alarms.length) { el.innerHTML='<div class="empty">설정된 알람이 없어요</div>'; return; }
+  el.innerHTML = alarms.map(a=>`<div class="alarm-item">
+    <div class="alarm-info"><div class="alarm-time-lbl">${a.time}</div><div class="alarm-note">${a.tag}${a.note?' · '+a.note:''}</div></div>
+    <button class="alarm-toggle ${a.on?'on':''}" onclick="toggleAlarm(${a.id})"></button>
+    <button class="alarm-del" onclick="deleteAlarm(${a.id})">✕</button>
+  </div>`).join('');
+}
+function checkAlarms() {
+  const cur = toTimeStr(new Date()), t = today();
+  alarms.forEach(a => {
+    if (!a.on || a.time!==cur || a.lastFired===t+'_'+cur) return;
+    a.lastFired = t+'_'+cur; saveAlarmsDB(); fireAlarm(a);
+  });
+}
+function fireAlarm(alarm) {
+  currentAlarmFiring = alarm;
+  document.getElementById('alarm-fire-msg').textContent = alarm.note ? `이제 ${alarm.note} 💪` : `${alarm.time} 알람이에요!`;
+  document.getElementById('alarm-fire-sub').textContent = `${alarm.tag} 혈당을 재고 기록해봐요`;
+  document.getElementById('alarm-fire-modal').classList.add('open');
+  playBeep(880, 800);
+}
+function dismissAlarm() {
+  document.getElementById('alarm-fire-modal').classList.remove('open');
+  const tag = currentAlarmFiring?.tag || '공복';
+  currentAlarmFiring = null; openQuickModal(tag);
+}
+function snoozeAlarm() {
+  const a = currentAlarmFiring;
+  document.getElementById('alarm-fire-modal').classList.remove('open');
+  currentAlarmFiring = null;
+  setTimeout(()=>fireAlarm(a), 5*60*1000);
+}
+
+// ── 빠른 기록 ─────────────────────────────────────────────
+function openQuickModal(tag) {
+  document.getElementById('qr-time').textContent = toTimeStr(new Date());
+  document.getElementById('qr-tag').value = tag || '공복';
+  document.getElementById('qr-val').value = '';
+  document.getElementById('qr-period').checked = isInPeriod(today());
+  document.getElementById('quick-modal').classList.add('open');
+  qrTimeInterval = setInterval(()=>{ document.getElementById('qr-time').textContent=toTimeStr(new Date()); }, 15000);
+}
+function closeQuickModal() { clearInterval(qrTimeInterval); document.getElementById('quick-modal').classList.remove('open'); }
+function saveQuickRecord() {
+  const val    = parseInt(document.getElementById('qr-val').value);
+  const status = document.getElementById('qr-tag').value;
+  const time   = document.getElementById('qr-time').textContent;
+  const period = document.getElementById('qr-period').checked;
+  const date   = today();
+  if (isNaN(val)||val<40||val>600) { alert('혈당 수치(40~600)를 올바르게 입력해주세요.'); return; }
+  const res = getSugarStatus(val, status);
+  dbSugar.push({ id:Date.now(), type:'SUGAR', date, time, val, status, analysis:res.s, analysisCol:res.c, analysisCls:res.cls, period, photo:'' });
+  dbSugar.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  saveSugarDB(); renderHistory(); renderStats();
+  closeQuickModal();
+  alert('✅ 기록됐어요! 오늘도 수고했어요 💪');
+}
+
+// ── 비프음 ────────────────────────────────────────────────
+function playBeep(freq=880, duration=500) {
+  if (!document.getElementById('alarm-sound-on').checked) return;
+  try {
+    const actx = new (window.AudioContext||window.webkitAudioContext)();
+    const osc = actx.createOscillator(), gain = actx.createGain();
+    osc.connect(gain); gain.connect(actx.destination);
+    osc.type='sine'; osc.frequency.value=freq;
+    gain.gain.setValueAtTime(0.4, actx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, actx.currentTime+duration/1000);
+    osc.start(); osc.stop(actx.currentTime+duration/1000);
+  } catch(e){}
+}
+</script>
+</body>
+</html>
